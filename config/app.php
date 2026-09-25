@@ -41,6 +41,8 @@ return [
 
     'debug' => (bool) env('APP_DEBUG', false),
 
+    'local_dashboard_bypass' => (bool) env('LOCAL_DASHBOARD_BYPASS', false),
+
     /*
     |--------------------------------------------------------------------------
     | Application URL

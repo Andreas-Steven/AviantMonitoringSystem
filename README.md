@@ -9,7 +9,7 @@
 
 ## Menjalankan dengan Docker
 
-Stack Docker ini memakai PHP 8.3-FPM, Nginx, dan MariaDB 11.4. Versi Laravel 12.58.0 dikunci di `composer.lock`, sedangkan asset Vite dibuat saat image dibangun.
+Stack Docker ini memakai PHP 8.3-FPM, Nginx, dan MySQL 8.4. Versi Laravel 12.58.0 dikunci di `composer.lock`, sedangkan asset Vite dibuat saat image dibangun.
 
 ### Prasyarat dan konfigurasi
 
@@ -19,7 +19,7 @@ Pastikan Docker Desktop dengan Docker Compose v2 sudah tersedia. Jalankan perint
 if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 ```
 
-Nilai default di `.env.example` ditujukan untuk penggunaan lokal. Compose mengarahkan aplikasi ke service `db`, menimpa pengaturan `DB_*` lama di `.env`, dan memakai driver session/cache berbasis file agar tidak perlu menambah tabel ke database yang disediakan. Pertahankan `MARIADB_DATABASE=manufacturing_test`, karena nama schema itu ditentukan di file SQL. `.env` dipasang ke container saat runtime dan tidak disalin ke image.
+Nilai default di `.env.example` ditujukan untuk pengujian lokal. Compose mengarahkan aplikasi ke service `db`, menimpa pengaturan `DB_*` lama di `.env`, dan memakai driver session/cache berbasis file agar tidak perlu menambah tabel ke database yang disediakan. Pertahankan `MYSQL_DATABASE=manufacturing_test`, karena nama schema itu ditentukan di file SQL. Untuk konfigurasi lokal ini, Laravel dan Navicat sama-sama memakai `root` dengan password `root`; jangan gunakan konfigurasi tersebut di production. Port MySQL untuk koneksi dari Navicat adalah `3307` pada host dan `3306` di dalam container. `LOCAL_DASHBOARD_BYPASS=true` membuka dashboard produksi dan API terkait tanpa login hanya ketika `APP_ENV=local`. Akses langsung ke `/login` diarahkan ke dashboard; ketika login diminta oleh modul lama, halaman login tetap tampil. Modul lain tetap memakai autentikasi; login legacy memerlukan tabel `app_users`, roles, dan permissions yang tidak ada di dataset manufacturing ini. Di production, bypass tidak aktif. Akun `root/root` ini hanya untuk pengujian lokal, jangan dipakai di production. Jika `.env` sudah ada, set `LOCAL_DASHBOARD_BYPASS=true`, `MYSQL_ROOT_PASSWORD=root`, `DB_USERNAME=root`, dan `DB_PASSWORD=root`; hapus `MYSQL_USER` dan `MYSQL_PASSWORD` karena keduanya hanya untuk membuat akun non-root. `.env` dipasang ke container saat runtime dan tidak disalin ke image.
 
 ### Build dan jalankan
 
@@ -41,23 +41,87 @@ docker compose exec app php artisan key:generate
 
 ### Import dataset
 
-File SQL yang diberikan berada di `C:\Users\Andreas Steven\Downloads\Documents\dataset.sql`. Perintah berikut menyalin file ke container MariaDB lalu mengimpornya:
+Jika hanya ingin menyalakan database untuk import, jalankan dari folder proyek:
 
 ```powershell
-docker compose cp "C:\Users\Andreas Steven\Downloads\Documents\dataset.sql" db:/tmp/dataset.sql
-docker compose exec -T db sh -c 'mariadb -uroot -p"$MARIADB_ROOT_PASSWORD" < /tmp/dataset.sql'
+docker compose up -d db
 ```
 
-**Perhatian:** script dataset menjalankan `DROP DATABASE IF EXISTS manufacturing_test` sebelum membuat ulang database. Import hanya ke database lokal yang memang boleh diganti. Jangan jalankan `php artisan migrate` terhadap database ini karena struktur yang disediakan tidak boleh diubah.
+Di Navicat, buat koneksi MySQL ke Host `127.0.0.1`, Port `3307`, User `root`, dan Password `root` (sesuai `MYSQL_ROOT_PASSWORD`). Gunakan fitur **Run SQL File** pada koneksi root tanpa database default, lalu pilih `C:\Users\Andreas Steven\Downloads\Documents\dataset.sql`. Script tersebut membuat database `manufacturing_test` sendiri.
+
+**Peringatan:** file SQL menjalankan `DROP DATABASE IF EXISTS manufacturing_test`, sehingga database dengan nama itu akan dihapus lalu dibuat ulang. Import hanya ke database lokal yang boleh diganti atau backup dahulu. Jangan jalankan `php artisan migrate` terhadap database ini karena struktur yang disediakan tidak boleh diubah. Konfigurasi root/root ini khusus local development dan tidak aman untuk production.
 
 ### URL aplikasi dan API
 
-Aplikasi tersedia di [http://localhost:8080](http://localhost:8080). Port dapat diubah dengan `APP_PORT` di `.env`. Endpoint API yang ditentukan pada soal teknis:
+Aplikasi tersedia di [http://localhost:8080](http://localhost:8080); path `/` membuka dashboard produksi. Port dapat diubah dengan `APP_PORT` di `.env`.
 
-- `GET /api/dashboard`
-- `GET /api/dashboard/machine/{id}`
-- `GET /api/production-orders`
-- `POST /api/production-results`
+Response API sukses memakai `code`, `success`, `message`, dan `data`. Key `meta` hanya muncul pada endpoint yang memiliki metadata — untuk daftar production order, `meta` berisi filter, sorting, dan pagination. Error validasi API memakai `code`, `success`, `message`, dan array `errors` di level teratas; setiap item berisi `field` dan `message`.
+
+```json
+{
+  "code": 200,
+  "success": true,
+  "message": "Production dashboard retrieved successfully.",
+  "data": {
+    "summary": {},
+    "trend_7_days": [],
+    "status_breakdown": [],
+    "top_machines": []
+  }
+}
+```
+
+Error validasi API menggunakan format terpisah dengan daftar error di level teratas:
+
+```json
+{
+  "code": 422,
+  "success": false,
+  "message": "Validation failed. Please review the provided data",
+  "errors": [
+    {
+      "field": "production_finish",
+      "message": "The production finish field must be a date after or equal to production date."
+    }
+  ]
+}
+```
+
+Untuk endpoint daftar, metadata filter, sorting, dan pagination berada di `meta`, sedangkan daftar hasil berada di `data`:
+
+```json
+{
+  "code": 200,
+  "success": true,
+  "message": "Production order list retrieved successfully.",
+  "meta": {
+    "filter": {},
+    "sort": { "by": "plan_start", "dir": "desc" },
+    "pagination": { "total": 0, "display": 0, "page": 1, "page_size": 10 }
+  },
+  "data": []
+}
+```
+
+Endpoint API yang ditentukan pada soal teknis:
+
+- `GET /api/dashboard` — KPI, trend tujuh hari, status work order, dan top 10 mesin dalam satu response tanpa `meta`.
+- `GET /api/dashboard/machine/{id}` — detail performa mesin; `{id}` memakai `machine_code` dan dicantumkan pada `meta.filter.machine_code`.
+- `GET /api/production-orders` — mendukung `search`, `product`, `machine`, `status`, `date`, `date_from`, `date_to`, `page`, `per_page`, `sort`/`sort_by`, dan `direction`/`sort_direction`.
+- `POST /api/production-results` — menerima JSON:
+
+```json
+{
+  "wo_number": "WO2026000001",
+  "production_date": "2026-09-25 08:00:00",
+  "production_finish": "2026-09-30 15:00:00",
+  "qty_good": 1200,
+  "qty_reject": 20,
+  "runtime_minutes": 360
+}
+```
+
+`production_date` dan `production_finish` menerima format `Y-m-d H:i:s`. `production_date` tidak boleh melewati hari ini; jam berapa pun pada hari ini tetap valid. `production_finish` bersifat opsional dan harus sama dengan atau setelah `production_date`; jika tidak dikirim, waktu selesai dihitung dari `runtime_minutes`. `runtime_minutes` juga bersifat opsional. API menolak kuantitas negatif dan work order yang bukan `RUNNING`.
 
 Untuk melihat log atau menghentikan container tanpa menghapus data database:
 

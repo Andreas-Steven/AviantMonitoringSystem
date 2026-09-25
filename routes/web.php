@@ -3,15 +3,20 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Web\DashboardController;
+use App\Http\Controllers\Web\ProductionDashboardController;
 
-Route::middleware('guest')->group(function () {
+Route::middleware(['local.dashboard.redirect', 'guest'])->group(function () {
     Route::get('/login', [LoginController::class, 'create'])->name('login');
     Route::post('/login', [LoginController::class, 'store'])->name('login.store');
 });
 
+Route::get('/', [ProductionDashboardController::class, 'index'])
+    ->middleware('production.dashboard.access')
+    ->name('production.dashboard');
+
 Route::middleware(['auth', 'user.active'])->group(function () {
     Route::post('/logout', [LoginController::class, 'destroy'])->name('logout');
-    Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     require __DIR__.'/web/admin-tools.php';
     require __DIR__.'/web/master.php';

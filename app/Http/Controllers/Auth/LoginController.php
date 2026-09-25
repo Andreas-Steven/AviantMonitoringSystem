@@ -9,6 +9,7 @@ use App\Domains\Access\Services\LoginAuditService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class LoginController extends Controller
@@ -25,6 +26,23 @@ class LoginController extends Controller
 
     public function store(LoginRequest $request): RedirectResponse
     {
+        foreach ([
+            'app_users',
+            'app_roles',
+            'app_permissions',
+            'app_user_roles',
+            'app_role_permissions',
+            'app_user_branch_access',
+            'app_login_audits',
+            'branches',
+        ] as $table) {
+            if (! Schema::hasTable($table)) {
+                return back()
+                    ->withErrors(['email' => 'Schema autentikasi modul lama belum tersedia pada database ini.'])
+                    ->withInput($request->only('email'));
+            }
+        }
+
         $user = AppUser::with(['roles.permissions', 'branchAccesses'])
             ->where('email', $request->string('email'))
             ->first();
@@ -62,7 +80,7 @@ class LoginController extends Controller
 
         $this->loginAuditService->log($user, $request->email, 'SUCCESS', 'Login success.');
 
-        return redirect()->route('dashboard');
+        return redirect()->route('production.dashboard');
     }
 
     public function destroy(): RedirectResponse

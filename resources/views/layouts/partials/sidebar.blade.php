@@ -17,6 +17,12 @@
             'label' => 'General',
             'items' => [
                 [
+                    'label' => 'Production Dashboard',
+                    'route' => 'production.dashboard',
+                    'patterns' => ['production.dashboard'],
+                    'icon' => 'bar-chart-3',
+                ],
+                [
                     'label' => 'Dashboard',
                     'route' => 'dashboard',
                     'patterns' => ['dashboard'],
@@ -278,10 +284,10 @@
         <div class="sidebar-brand-wrap flex items-center justify-between gap-3">
             <div class="sidebar-brand-text min-w-0">
                 <div class="truncate text-lg font-semibold tracking-tight text-slate-900">
-                    Attendance App
+                    {{ config('app.name') }}
                 </div>
                 <div class="mt-0.5 text-xs text-slate-500">
-                    Internal Management
+                    Production &amp; Workforce
                 </div>
             </div>
 
