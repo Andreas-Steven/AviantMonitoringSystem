@@ -1,0 +1,2 @@
+@extends('layouts.app')
+@section('content')<div class="mb-6"><h1 class="text-2xl font-semibold tracking-tight">Add Position Role</h1><p class="mt-1 text-sm text-slate-500">Tambah role organisasi baru</p></div><form method="POST" action="{{ route('master.position-roles.store') }}" class="space-y-6">@csrf @include('master.position-roles.partials.form')</form>@endsection
