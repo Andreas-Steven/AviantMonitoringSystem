@@ -12,6 +12,11 @@
             const collapsed = localStorage.getItem('sidebarCollapsed') === 'true';
             document.documentElement.classList.toggle('sidebar-collapsed', collapsed);
             window.__sidebarCollapsed = collapsed;
+
+            const theme = localStorage.getItem('theme')
+                || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            window.__darkMode = theme === 'dark';
+            document.documentElement.classList.toggle('dark', window.__darkMode);
         })();
     </script>
 
@@ -60,6 +65,10 @@
                 border-bottom: 1px solid #e2e8f0;
             }
 
+            html.dark .app-sidebar {
+                border-bottom-color: #1e293b;
+            }
+
             .app-sidebar > div:nth-child(2) {
                 max-height: calc(46vh - 76px);
             }
@@ -87,17 +96,24 @@
         }
     </style>
 </head>
-<body class="min-h-screen bg-slate-50 text-slate-900 antialiased">
+<body class="min-h-screen bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100">
     <div
         x-data="{
             sidebarCollapsed: window.__sidebarCollapsed,
+            darkMode: window.__darkMode,
             toggleSidebar() {
                 this.sidebarCollapsed = !this.sidebarCollapsed;
                 localStorage.setItem('sidebarCollapsed', this.sidebarCollapsed ? 'true' : 'false');
                 document.documentElement.classList.toggle('sidebar-collapsed', this.sidebarCollapsed);
+            },
+            toggleDark() {
+                this.darkMode = !this.darkMode;
+                localStorage.setItem('theme', this.darkMode ? 'dark' : 'light');
+                document.documentElement.classList.toggle('dark', this.darkMode);
+                window.dispatchEvent(new CustomEvent('theme-changed', { detail: { dark: this.darkMode } }));
             }
         }"
-        class="app-shell min-h-screen flex flex-col lg:flex-row bg-slate-50"
+        class="app-shell min-h-screen flex flex-col lg:flex-row bg-slate-50 dark:bg-slate-950"
         style="display:flex; min-height:100vh;"
     >
         @include('layouts.partials.sidebar')

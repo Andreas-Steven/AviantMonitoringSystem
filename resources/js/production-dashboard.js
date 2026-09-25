@@ -1,6 +1,10 @@
 import Alpine from 'alpinejs';
+import Chart from 'chart.js/auto';
 
-Alpine.data('productionDashboard', () => ({
+Alpine.data('productionDashboard', () => {
+    const charts = { trend: null, status: null, machine: null };
+
+    return {
     dashboardLoading: true,
     dashboardError: '',
     orderLoading: false,
@@ -18,7 +22,7 @@ Alpine.data('productionDashboard', () => ({
     statusBreakdown: [],
     topMachines: [],
     trendMetric: 'good_qty',
-    activeTrendPoint: null,
+    activeStatus: null,
     machineSearch: '',
     machineSort: { field: 'good_qty', direction: 'desc' },
     orders: [],
@@ -41,6 +45,10 @@ Alpine.data('productionDashboard', () => ({
         return this.statusBreakdown.reduce((count, item) => count + Number(item.total || 0), 0);
     },
     init() {
+        this.$nextTick(() => this.initCharts());
+        this.$watch('trendMetric', () => this.updateTrendChart());
+        this.$watch('machineSearch', () => this.updateMachineChart());
+        window.addEventListener('theme-changed', () => this.applyChartTheme());
         this.refresh();
     },
     async requestJson(url, options = {}) {
@@ -79,6 +87,7 @@ Alpine.data('productionDashboard', () => ({
             this.trend = payload.trend_7_days || [];
             this.statusBreakdown = payload.status_breakdown || [];
             this.topMachines = payload.top_machines || [];
+            this.updateCharts();
         } catch (error) {
             this.dashboardError = error.message;
         } finally {
@@ -171,48 +180,238 @@ Alpine.data('productionDashboard', () => ({
             return direction === 'asc' ? comparison : -comparison;
         });
     },
-    chartMax() {
-        return Math.max(1, ...this.trend.map((day) => Number(day[this.trendMetric] || 0)));
+    isDarkMode() {
+        return document.documentElement.classList.contains('dark');
     },
-    chartPoints() {
-        const left = 54;
-        const right = 692;
-        const top = 24;
-        const bottom = 190;
-        const max = this.chartMax();
+    initCharts() {
+        const dark = this.isDarkMode();
+        Chart.defaults.font.family = 'ui-sans-serif, system-ui, sans-serif';
+        Chart.defaults.color = dark ? '#94a3b8' : '#64748b';
 
-        return this.trend.map((day, index) => {
-            const value = Number(day[this.trendMetric] || 0);
-            const x = this.trend.length > 1
-                ? left + ((right - left) * index) / (this.trend.length - 1)
-                : (left + right) / 2;
+        const gridColor = dark ? '#334155' : '#e2e8f0';
+        const donutBorder = dark ? '#0f172a' : '#ffffff';
 
-            return {
-                ...day,
-                x,
-                y: bottom - ((value / max) * (bottom - top)),
-                value,
-            };
-        });
+        if (this.$refs.trendChart) {
+            charts.trend = new Chart(this.$refs.trendChart, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Good Qty',
+                        data: [],
+                        borderColor: '#2563eb',
+                        backgroundColor: 'rgba(37, 99, 235, 0.15)',
+                        fill: true,
+                        tension: 0.35,
+                        borderWidth: 3,
+                        pointRadius: 4,
+                        pointHoverRadius: 6,
+                        pointBackgroundColor: '#ffffff',
+                        pointBorderColor: '#2563eb',
+                        pointBorderWidth: 2.5,
+                    }],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => ` ${context.dataset.label}: ${this.formatNumber(context.parsed.y)}`,
+                            },
+                        },
+                    },
+                    scales: {
+                        x: {
+                            border: { display: false },
+                            grid: { display: false },
+                            ticks: { font: { size: 10 } },
+                        },
+                        y: {
+                            beginAtZero: true,
+                            border: { display: false },
+                            grid: { color: gridColor },
+                            ticks: { font: { size: 10 }, callback: (value) => this.formatCompact(value) },
+                        },
+                    },
+                },
+            });
+        }
+
+        if (this.$refs.statusChart) {
+            charts.status = new Chart(this.$refs.statusChart, {
+                type: 'doughnut',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        data: [],
+                        backgroundColor: [],
+                        borderColor: donutBorder,
+                        borderWidth: 2,
+                        hoverOffset: 6,
+                    }],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '72%',
+                    onHover: (event, elements) => {
+                        const index = elements.length && this.orderCount ? elements[0].index : -1;
+                        this.activeStatus = index >= 0 ? this.statusBreakdown[index] || null : null;
+                        if (event.native?.target) {
+                            event.native.target.style.cursor = index >= 0 ? 'pointer' : 'default';
+                        }
+                    },
+                    onClick: (event, elements) => {
+                        const item = elements.length && this.orderCount ? this.statusBreakdown[elements[0].index] : null;
+                        if (item) this.applyStatusFilter(item.status);
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            filter: () => this.orderCount > 0,
+                            callbacks: {
+                                label: (context) => {
+                                    const percent = (context.parsed / this.orderCount) * 100;
+                                    return ` ${context.label}: ${this.formatNumber(context.parsed)} (${this.formatPercent(percent)})`;
+                                },
+                            },
+                        },
+                    },
+                },
+            });
+        }
+
+        if (this.$refs.machineChart) {
+            charts.machine = new Chart(this.$refs.machineChart, {
+                type: 'bar',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Good Qty',
+                        data: [],
+                        backgroundColor: '#2563eb',
+                        hoverBackgroundColor: '#1d4ed8',
+                        borderRadius: 6,
+                        maxBarThickness: 28,
+                    }],
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    onHover: (event, elements) => {
+                        if (event.native?.target) {
+                            event.native.target.style.cursor = elements.length ? 'pointer' : 'default';
+                        }
+                    },
+                    onClick: (event, elements) => {
+                        const machine = elements.length ? this.filteredMachines()[elements[0].index] : null;
+                        if (machine) this.openMachineDetails(machine.machine_code);
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => ` Good Qty: ${this.formatNumber(context.parsed.x)}`,
+                            },
+                        },
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            border: { display: false },
+                            grid: { color: gridColor },
+                            ticks: { font: { size: 10 }, callback: (value) => this.formatCompact(value) },
+                        },
+                        y: {
+                            border: { display: false },
+                            grid: { display: false },
+                            ticks: { font: { size: 11 } },
+                        },
+                    },
+                },
+            });
+        }
     },
-    chartGridLines() {
-        const max = this.chartMax();
+    applyChartTheme() {
+        const dark = this.isDarkMode();
+        Chart.defaults.color = dark ? '#94a3b8' : '#64748b';
+        const gridColor = dark ? '#334155' : '#e2e8f0';
 
-        return Array.from({ length: 5 }, (_, index) => ({
-            y: 24 + (42 * index),
-            value: Math.round((max * (4 - index)) / 4),
-        }));
+        if (charts.trend) {
+            charts.trend.options.scales.y.grid.color = gridColor;
+            charts.trend.update();
+        }
+        if (charts.machine) {
+            charts.machine.options.scales.x.grid.color = gridColor;
+            charts.machine.update();
+        }
+        if (charts.status) {
+            charts.status.data.datasets[0].borderColor = dark ? '#0f172a' : '#ffffff';
+            charts.status.update();
+        }
     },
-    trendLinePath() {
-        return this.chartPoints()
-            .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
-            .join(' ');
+    updateCharts() {
+        if (!charts.trend && !charts.status && !charts.machine) {
+            this.initCharts();
+        }
+        this.updateTrendChart();
+        this.updateStatusChart();
+        this.updateMachineChart();
     },
-    trendAreaPath() {
-        const points = this.chartPoints();
-        if (!points.length) return '';
+    updateTrendChart() {
+        if (!charts.trend) return;
 
-        return `M ${points[0].x} 190 ${points.map((point) => `L ${point.x} ${point.y}`).join(' ')} L ${points[points.length - 1].x} 190 Z`;
+        const reject = this.trendMetric === 'reject_qty';
+        const color = reject ? '#dc2626' : '#2563eb';
+        const dataset = charts.trend.data.datasets[0];
+        dataset.label = reject ? 'Reject Qty' : 'Good Qty';
+        dataset.data = this.trend.map((day) => Number(day[this.trendMetric] || 0));
+        dataset.borderColor = color;
+        dataset.backgroundColor = reject ? 'rgba(220, 38, 38, 0.15)' : 'rgba(37, 99, 235, 0.15)';
+        dataset.pointBorderColor = color;
+        charts.trend.data.labels = this.trend.map((day) => this.formatDate(day.date));
+        charts.trend.update();
+    },
+    updateStatusChart() {
+        if (!charts.status) return;
+
+        const hasData = this.orderCount > 0;
+        charts.status.data.labels = hasData ? this.statusBreakdown.map((item) => item.status) : ['Kosong'];
+        charts.status.data.datasets[0].data = hasData ? this.statusBreakdown.map((item) => Number(item.total || 0)) : [1];
+        charts.status.data.datasets[0].backgroundColor = hasData
+            ? this.statusBreakdown.map((item) => this.statusColor(item.status))
+            : ['#e2e8f0'];
+        charts.status.update();
+    },
+    updateMachineChart() {
+        if (!charts.machine) return;
+
+        const machines = this.filteredMachines();
+        charts.machine.data.labels = machines.map((machine) => machine.machine_name);
+        charts.machine.data.datasets[0].data = machines.map((machine) => Number(machine.good_qty || 0));
+        charts.machine.update();
+    },
+    highlightStatus(status) {
+        const index = this.statusBreakdown.findIndex((item) => item.status === status);
+        this.activeStatus = index >= 0 ? this.statusBreakdown[index] : null;
+        if (!charts.status || index < 0) return;
+
+        const active = [{ datasetIndex: 0, index }];
+        charts.status.setActiveElements(active);
+        charts.status.tooltip.setActiveElements(active, { x: 0, y: 0 });
+        charts.status.update();
+    },
+    clearStatusHighlight() {
+        this.activeStatus = null;
+        if (!charts.status) return;
+
+        charts.status.setActiveElements([]);
+        charts.status.tooltip.setActiveElements([], { x: 0, y: 0 });
+        charts.status.update();
     },
     statusColor(status) {
         return {
@@ -224,29 +423,11 @@ Alpine.data('productionDashboard', () => ({
     },
     statusClasses(status) {
         return {
-            RUNNING: 'bg-blue-50 text-blue-700 ring-blue-200',
-            FINISHED: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
-            OPEN: 'bg-amber-50 text-amber-700 ring-amber-200',
-            CANCELLED: 'bg-rose-50 text-rose-700 ring-rose-200',
-        }[String(status).toUpperCase()] || 'bg-slate-100 text-slate-700 ring-slate-200';
-    },
-    statusDonutStyle() {
-        const total = this.orderCount;
-        if (!total) return 'background: conic-gradient(#e2e8f0 0deg 360deg)';
-
-        let start = 0;
-        const slices = this.statusBreakdown.map((item) => {
-            const end = start + ((Number(item.total || 0) / total) * 360);
-            const slice = `${this.statusColor(item.status)} ${start}deg ${end}deg`;
-            start = end;
-            return slice;
-        });
-
-        return `background: conic-gradient(${slices.join(', ')})`;
-    },
-    machineBarWidth(value) {
-        const maximum = Math.max(1, ...this.topMachines.map((machine) => Number(machine.good_qty || 0)));
-        return Math.min(100, (Number(value || 0) / maximum) * 100);
+            RUNNING: 'bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:ring-blue-500/30',
+            FINISHED: 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30',
+            OPEN: 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30',
+            CANCELLED: 'bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-500/30',
+        }[String(status).toUpperCase()] || 'bg-slate-100 text-slate-700 ring-slate-200 dark:bg-slate-500/10 dark:text-slate-300 dark:ring-slate-500/30';
     },
     applyStatusFilter(status) {
         this.orderFilters.status = this.orderFilters.status === status ? '' : status;
@@ -286,13 +467,8 @@ Alpine.data('productionDashboard', () => ({
         const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
         return `${day} ${monthNames[Number(month) - 1]} ${year}`;
     },
-    formatDateShort(value) {
-        if (!value) return '';
-        const [, month, day] = String(value).slice(0, 10).split('-');
-        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-        return `${day} ${monthNames[Number(month) - 1]}`;
-    },
     formatDateTime(value) {
         return value ? String(value).replace('T', ' ').slice(0, 16) : '—';
     },
-}));
+    };
+});
