@@ -1,5 +1,6 @@
 services:
   app:
+    image: andreassteven/avian-monitoring-system:app
     build:
       context: .
       target: app
@@ -24,6 +25,7 @@ services:
         condition: service_healthy
 
   nginx:
+    image: andreassteven/avian-monitoring-system:web
     build:
       context: .
       target: web
