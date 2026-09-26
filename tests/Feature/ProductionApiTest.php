@@ -138,7 +138,9 @@ class ProductionApiTest extends TestCase
             ->assertJsonPath('success', false)
             ->assertJsonPath('message', 'Validation failed. Please review the provided data')
             ->assertJsonPath('errors.0.field', 'production_date')
+            ->assertJsonPath('errors.0.message', 'The production date field must be a date before or equal to today.')
             ->assertJsonPath('errors.1.field', 'qty_good')
+            ->assertJsonPath('errors.1.message', 'The good quantity must be at least 0.')
             ->assertJsonStructure(['errors' => [['field', 'message']]])
             ->assertJsonMissingPath('data')
             ->assertJsonMissingPath('meta');
@@ -151,7 +153,17 @@ class ProductionApiTest extends TestCase
         ])->assertUnprocessable()
             ->assertJsonPath('code', 422)
             ->assertJsonPath('success', false)
-            ->assertJsonPath('errors.0.field', 'wo_number');
+            ->assertJsonPath('errors.0.field', 'wo_number')
+            ->assertJsonPath('errors.0.message', 'The production order must have a status of RUNNING.');
+    }
+
+    public function test_production_result_api_uses_translated_required_validation_messages(): void
+    {
+        $this->postJson('/api/production-results', [])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Validation failed. Please review the provided data')
+            ->assertJsonPath('errors.0.field', 'wo_number')
+            ->assertJsonPath('errors.0.message', 'The production order field is required.');
     }
 
     private function createProductionSchema(): void

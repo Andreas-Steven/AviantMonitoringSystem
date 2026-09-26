@@ -63,7 +63,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 return response()->json([
                     'code' => HttpStatusCode::UnprocessableEntity->value,
                     'success' => false,
-                    'message' => 'Validation failed. Please review the provided data',
+                    'message' => __('production.validation.failed'),
                     'errors' => $errors,
                 ], HttpStatusCode::UnprocessableEntity->value);
             }

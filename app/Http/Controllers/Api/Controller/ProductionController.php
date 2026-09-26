@@ -51,7 +51,7 @@ class ProductionController extends Controller
         return ApiResponse::success(
             data: $machine->toArray(),
             message: __('production.machine_performance_retrieved'),
-            meta: $this->singleResultMeta($machineData, ['machine_code' => $id]),
+            meta: $this->singleResultMeta($machine->toArray(), ['machine_code' => $id]),
         );
     }
 

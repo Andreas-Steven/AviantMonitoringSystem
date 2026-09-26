@@ -46,7 +46,7 @@ class ProductionInputValidator
                 'date_format:Y-m-d H:i:s',
                 function (string $attribute, mixed $value, Closure $fail): void {
                     if (CarbonImmutable::parse($value)->toDateString() > today()->toDateString()) {
-                        $fail('The production date field must be a date before or equal to today.');
+                        $fail(__('production.validation.production_date_not_after_today'));
                     }
                 },
             ],
@@ -59,6 +59,6 @@ class ProductionInputValidator
             'qty_good' => ['required', 'integer', 'min:0'],
             'qty_reject' => ['required', 'integer', 'min:0'],
             'runtime_minutes' => ['nullable', 'integer', 'min:0'],
-        ]);
+        ], __('production.validation.messages'));
     }
 }

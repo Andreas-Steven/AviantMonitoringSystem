@@ -26,13 +26,10 @@ class StoreProductionResultAction
         return DB::transaction(function () use ($data): StoredProductionResultData {
             $workOrder = $this->orderRepository->findForUpdate($data->workOrderNumber);
 
-            if (
-                !$workOrder
-                || WorkOrderStatus::tryFrom(strtoupper((string) $workOrder->status)) !== WorkOrderStatus::Running
-            ) {
+            if (!$workOrder || WorkOrderStatus::tryFrom(strtoupper((string) $workOrder->status)) !== WorkOrderStatus::Running) {
                 throw ValidationException::withMessages([
                     'wo_number' => [
-                        'Production Order harus berstatus '.WorkOrderStatus::Running->value.'.'
+                        __('production.validation.work_order_must_be_running', ['status' => WorkOrderStatus::Running->value])
                     ],
                 ]);
             }
