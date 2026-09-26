@@ -1,7 +1,13 @@
 <?php
 
+use App\Http\Middleware\EnsureProductionDashboardAccess;
+use App\Http\Middleware\EnsureUserHasBranchAccess;
+use App\Http\Middleware\EnsureUserHasPermission;
+use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\LocalApiCsrfToken;
+use App\Http\Middleware\RedirectLocalLoginToDashboard;
 use App\Http\Responses\ApiResponse;
+use App\Shared\Enums\HttpStatusCode;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -28,11 +34,11 @@ return Application::configure(basePath: dirname(__DIR__))
         );
 
         $middleware->alias([
-            'user.active' => \App\Http\Middleware\EnsureUserIsActive::class,
-            'permission' => \App\Http\Middleware\EnsureUserHasPermission::class,
-            'branch.access' => \App\Http\Middleware\EnsureUserHasBranchAccess::class,
-            'production.dashboard.access' => \App\Http\Middleware\EnsureProductionDashboardAccess::class,
-            'local.dashboard.redirect' => \App\Http\Middleware\RedirectLocalLoginToDashboard::class,
+            'user.active' => EnsureUserIsActive::class,
+            'permission' => EnsureUserHasPermission::class,
+            'branch.access' => EnsureUserHasBranchAccess::class,
+            'production.dashboard.access' => EnsureProductionDashboardAccess::class,
+            'local.dashboard.redirect' => RedirectLocalLoginToDashboard::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
@@ -55,21 +61,21 @@ return Application::configure(basePath: dirname(__DIR__))
                 }
 
                 return response()->json([
-                    'code' => 422,
+                    'code' => HttpStatusCode::UnprocessableEntity->value,
                     'success' => false,
                     'message' => 'Validation failed. Please review the provided data',
                     'errors' => $errors,
-                ], 422);
+                ], HttpStatusCode::UnprocessableEntity->value);
             }
 
             $code = $exception instanceof HttpExceptionInterface
                 ? $exception->getStatusCode()
-                : 500;
+                : HttpStatusCode::InternalServerError->value;
             $message = match ($code) {
-                401 => 'Unauthenticated.',
-                403 => 'Forbidden.',
-                404 => 'Not found.',
-                405 => 'Method not allowed.',
+                HttpStatusCode::Unauthorized->value => 'Unauthenticated.',
+                HttpStatusCode::Forbidden->value => 'Forbidden.',
+                HttpStatusCode::NotFound->value => 'Not found.',
+                HttpStatusCode::MethodNotAllowed->value => 'Method not allowed.',
                 default => $code >= 500 ? 'Internal server error.' : $exception->getMessage(),
             };
 

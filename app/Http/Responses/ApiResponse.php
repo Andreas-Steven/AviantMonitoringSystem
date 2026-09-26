@@ -2,6 +2,7 @@
 
 namespace App\Http\Responses;
 
+use App\Shared\Enums\HttpStatusCode;
 use Illuminate\Http\JsonResponse;
 
 final class ApiResponse
@@ -9,7 +10,7 @@ final class ApiResponse
     public static function success(
         mixed $data,
         string $message,
-        int $code = 200,
+        int $code = HttpStatusCode::Ok->value,
         ?array $meta = null,
     ): JsonResponse {
         $payload = [

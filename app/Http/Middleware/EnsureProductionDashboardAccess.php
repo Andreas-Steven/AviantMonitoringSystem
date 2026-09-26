@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Http\Responses\ApiResponse;
+use App\Shared\Enums\HttpStatusCode;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -19,7 +20,7 @@ class EnsureProductionDashboardAccess
 
         if (! $user) {
             return $request->expectsJson() || $request->is('api/*')
-                ? ApiResponse::failure('Unauthenticated.', 401)
+                ? ApiResponse::failure('Unauthenticated.', HttpStatusCode::Unauthorized->value)
                 : redirect()->guest(route('login'));
         }
 
@@ -27,7 +28,7 @@ class EnsureProductionDashboardAccess
             auth()->logout();
 
             return $request->expectsJson() || $request->is('api/*')
-                ? ApiResponse::failure('User is inactive.', 403)
+                ? ApiResponse::failure('User is inactive.', HttpStatusCode::Forbidden->value)
                 : redirect()->route('login')->withErrors(['email' => 'User tidak aktif.']);
         }
 
