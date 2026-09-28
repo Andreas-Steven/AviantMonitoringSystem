@@ -1,61 +1,94 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Aviant Monitoring System
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Production Monitoring System Berbasis Laravel yang digunakan untuk memonitor aktivitas produksi pabrik
 
-## Menjalankan dengan Docker
+**GitHub:** https://github.com/Andreas-Steven/AviantMonitoringSystem
 
-Stack Docker ini memakai PHP 8.3-FPM, Nginx, dan MySQL 8.4. Versi Laravel 12.58.0 dikunci di `composer.lock`, sedangkan asset Vite dibuat saat image dibangun.
+## System Requirements
 
-### Prasyarat dan konfigurasi
+- Laravel 12
+- PHP 8.3-FPM
+- Nginx
+- MySQL 8.4
+- Docker Desktop 
 
-Pastikan Docker Desktop dengan Docker Compose v2 sudah tersedia. Jalankan perintah berikut dari PowerShell pada folder proyek. Perintah pertama hanya membuat `.env` bila file tersebut belum ada, sehingga `.env` yang sudah ada tidak tertimpa.
+## 1. Menjalankan dengan Docker
 
-```powershell
-if (-not (Test-Path .env)) { Copy-Item .env.example .env }
-```
-
-Nilai default di `.env.example` ditujukan untuk pengujian lokal. Compose mengarahkan aplikasi ke service `db`, menimpa pengaturan `DB_*` lama di `.env`, dan memakai driver session/cache berbasis file agar tidak perlu menambah tabel ke database yang disediakan. Pertahankan `MYSQL_DATABASE=manufacturing_test`, karena nama schema itu ditentukan di file SQL. Untuk konfigurasi lokal ini, Laravel dan Navicat sama-sama memakai `root` dengan password `root`; jangan gunakan konfigurasi tersebut di production. Port MySQL untuk koneksi dari Navicat adalah `3307` pada host dan `3306` di dalam container. `LOCAL_DASHBOARD_BYPASS=true` membuka dashboard produksi dan API terkait tanpa login hanya ketika `APP_ENV=local`. Akses langsung ke `/login` diarahkan ke dashboard; ketika login diminta oleh modul lama, halaman login tetap tampil. Modul lain tetap memakai autentikasi; login legacy memerlukan tabel `app_users`, roles, dan permissions yang tidak ada di dataset manufacturing ini. Di production, bypass tidak aktif. Akun `root/root` ini hanya untuk pengujian lokal, jangan dipakai di production. Jika `.env` sudah ada, set `LOCAL_DASHBOARD_BYPASS=true`, `MYSQL_ROOT_PASSWORD=root`, `DB_USERNAME=root`, dan `DB_PASSWORD=root`; hapus `MYSQL_USER` dan `MYSQL_PASSWORD` karena keduanya hanya untuk membuat akun non-root. `.env` dipasang ke container saat runtime dan tidak disalin ke image.
+Copy file `.env.example` yang tersedia:
 
 ### Build dan jalankan
+
+Jalankan via Terminal:
 
 ```powershell
 docker compose up -d --build
 ```
 
-Untuk menjalankan kembali setelah image sudah dibuat:
+Perintah ini membangun 3 service:
 
-```powershell
-docker compose up -d
-```
+| Service | Image | Fungsi |
+|---|---|---|
+| `app` | `andreassteven/avian-monitoring-system:app` | PHP 8.3-FPM (Laravel) |
+| `nginx` | `andreassteven/avian-monitoring-system:web` | Web server, port `8080` |
+| `db` | `mysql:8.4` | Database, port host `3307` |
 
-Jika `APP_KEY` di `.env` masih kosong, buat key setelah container hidup:
+Generate `APP_KEY` di `.env` setelah container berjalan:
 
 ```powershell
 docker compose exec app php artisan key:generate
 ```
 
-### Import dataset
+## 2. Konfigurasi Environment (.env)
 
-Jika hanya ingin menyalakan database untuk import, jalankan dari folder proyek:
+Variabel penting dalam file `.env` di antaranya:
+
+| Variabel | Default | Keterangan |
+|---|---|---|
+| `APP_PORT` | `8080` | Port aplikasi di host |
+| `MYSQL_PORT` | `3307` | Port MySQL di host (untuk Navicat/CLI) |
+| `MYSQL_DATABASE` | `manufacturing_test` | Nama schema — harus sama dengan yang dibuat `dataset.sql` |
+| `MYSQL_ROOT_PASSWORD` | `root` | Password root MySQL |
+| `DB_HOST` / `DB_PORT` | `db` / `3306` | Koneksi Laravel ke MySQL *di dalam* jaringan Docker |
+| `DB_USERNAME` / `DB_PASSWORD` | `root` / `root` | Kredensial database |
+| `LOCAL_DASHBOARD_BYPASS` | `true` | Buka dashboard & API tanpa login saat `APP_ENV=local` |
+
+## 3. Import Database
+
+Dataset tersedia di `database/database/dataset.sql`. 
+
+### Opsi A — via Navicat
+
+Buat koneksi MySQL:
+
+- **Host:** `localhost`
+- **Port:** `3307`
+- **User:** `root`
+- **Password:** `root`
+
+Lalu **Run SQL File** pada koneksi tersebut dan pilih `database/database/dataset.sql`.
+
+Catatan:
+- File `Soal_1.sql` s/d `Soal_4.sql` merupakan query jawaban soal teknis
+
+### Opsi B — via Docker CLI
+
+Setelah container `db` hidup:
 
 ```powershell
-docker compose up -d db
+Get-Content database\database\dataset.sql | docker compose exec -T db sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD"'
 ```
 
-Di Navicat, buat koneksi MySQL ke Host `127.0.0.1`, Port `3307`, User `root`, dan Password `root` (sesuai `MYSQL_ROOT_PASSWORD`). Gunakan fitur **Run SQL File** pada koneksi root tanpa database default, lalu pilih `C:\Users\Andreas Steven\Downloads\Documents\dataset.sql`. Script tersebut membuat database `manufacturing_test` sendiri.
+## 4. URL Aplikasi & Endpoint API
 
-**Peringatan:** file SQL menjalankan `DROP DATABASE IF EXISTS manufacturing_test`, sehingga database dengan nama itu akan dihapus lalu dibuat ulang. Import hanya ke database lokal yang boleh diganti atau backup dahulu. Jangan jalankan `php artisan migrate` terhadap database ini karena struktur yang disediakan tidak boleh diubah. Konfigurasi root/root ini khusus local development dan tidak aman untuk production.
+### 1. GET `/api/dashboard`
 
-### URL aplikasi dan API
+#### Request — Dashboard
 
-Aplikasi tersedia di [http://localhost:8080](http://localhost:8080); path `/` membuka dashboard produksi. Port dapat diubah dengan `APP_PORT` di `.env`.
+```http
+GET /api/dashboard
+```
 
-Response API sukses memakai `code`, `success`, `message`, dan `data`. Key `meta` hanya muncul pada endpoint yang memiliki metadata — untuk daftar production order, `meta` berisi filter, sorting, dan pagination. Error validasi API memakai `code`, `success`, `message`, dan array `errors` di level teratas; setiap item berisi `field` dan `message`.
+#### Result — Dashboard
 
 ```json
 {
@@ -63,15 +96,183 @@ Response API sukses memakai `code`, `success`, `message`, dan `data`. Key `meta`
   "success": true,
   "message": "Production dashboard retrieved successfully.",
   "data": {
-    "summary": {},
-    "trend_7_days": [],
-    "status_breakdown": [],
-    "top_machines": []
+    "summary": {
+      "total_machine": 24,
+      "running_order": 157,
+      "finished_order": 1243,
+      "today_target": 8572,
+      "today_good": 7811,
+      "today_reject": 26,
+      "achievement": 91.12
+    },
+    "trend_7_days": [
+      {
+        "date": "2026-12-25",
+        "good_qty": 8919,
+        "reject_qty": 63,
+        "achievement": 60.46
+      },
+      ...
+    ],
+    "status_breakdown": [
+      {
+        "status": "RUNNING",
+        "total": 157
+      },
+      ...
+    ],
+    "top_machines": [
+      {
+        "machine_code": "DSP02",
+        "machine_name": "High Speed Disperser 02",
+        "good_qty": 260210,
+        "reject_qty": 2131,
+        "target_qty": 295313,
+        "achievement": 88.11
+      },
+      ...
+    ]
   }
 }
 ```
 
-Error validasi API menggunakan format terpisah dengan daftar error di level teratas:
+### 2. GET `/api/dashboard/machine/:id`
+
+#### Request — Machine
+
+```http
+GET /api/dashboard/machine/:id
+```
+
+#### Result — Machine
+
+```json
+{
+  "code": 200,
+  "success": true,
+  "message": "Machine performance retrieved successfully.",
+  "meta": {
+    "filter": {
+      "machine_code": "WMX01"
+    },
+    "sort": {
+      "by": "id",
+      "dir": "desc"
+    },
+    "pagination": {
+      "total": 1,
+      "display": 1,
+      "page": 1,
+      "page_size": 10
+    }
+  },
+  "data": {
+    "machine_code": "WMX01",
+    "machine_name": "Waterproof Mixer 01",
+    "total_order": 76,
+    "good_qty": 173307,
+    "reject_qty": 1410,
+    "downtime_minutes": 2223,
+    "achievement": 87.11
+  }
+}
+```
+
+### 3. GET `/api/production-orders`
+
+#### Request — Production Orders
+
+```http
+GET /api/production-orders?search=WO2026&status=RUNNING&sort_by=plan_start&sort_dir=desc&per_page=10&page=1
+```
+
+#### Result — Production Orders
+
+```json
+{
+  "code": 200,
+  "success": true,
+  "message": "Production order list retrieved successfully.",
+  "meta": {
+    "filter": {
+      "search": "WO2026",
+      "status": "RUNNING"
+    },
+    "sort": {
+      "by": "plan_start",
+      "dir": "desc"
+    },
+    "pagination": {
+      "total": 157,
+      "display": 10,
+      "page": 1,
+      "page_size": 10
+    }
+  },
+  "data": [
+    {
+      "wo_number": "WO2026000137",
+      "product_code": "AVX0003",
+      "product_name": "Avitex Interior Matt White 20 Kg",
+      "machine_code": "WMX01",
+      "machine_name": "Waterproof Mixer 01",
+      "employee_no": "EMP0046",
+      "employee_name": "Slamet Gunawan",
+      "shift": "Shift 3",
+      "target_qty": 1187,
+      "plan_start": "2026-12-31 23:00:00",
+      "plan_finish": "2027-01-01 07:00:00",
+      "status": "RUNNING",
+      "good_qty": 498,
+      "reject_qty": 1
+    },
+    ...
+  ]
+}
+```
+
+### 4. POST `/api/production-results`
+
+#### Request — Production Results
+
+```http
+POST /api/production-results
+```
+
+**Body:**
+
+```json
+{
+  "wo_number": "WO2026000137",
+  "production_date": "2026-09-27 16:42:43",
+  "production_finish": "2026-09-28 10:32:45",
+  "qty_good": 1500,
+  "qty_reject": 25,
+  "runtime_minutes": 420
+}
+```
+
+#### Result — Success
+
+```json
+{
+  "code": 201,
+  "success": true,
+  "message": "Production result created successfully.",
+  "data": {
+    "id": 1500,
+    "wo_number": "WO2026000137",
+    "production_date": "2026-09-27 16:42:43",
+    "production_finish": "2026-09-28 10:32:45",
+    "qty_good": 1500,
+    "qty_reject": 25,
+    "runtime_minutes": 420,
+    "achievement": 126.37
+  }
+}
+```
+
+#### Result — Error: Production Order Not Running
 
 ```json
 {
@@ -80,103 +281,29 @@ Error validasi API menggunakan format terpisah dengan daftar error di level tera
   "message": "Validation failed. Please review the provided data",
   "errors": [
     {
+      "field": "wo_number",
+      "message": "The production order must have a status of RUNNING."
+    }
+  ]
+}
+```
+
+#### Result — Error: Production Date
+
+```json
+{
+  "code": 422,
+  "success": false,
+  "message": "Validation failed. Please review the provided data",
+  "errors": [
+    {
+      "field": "production_date",
+      "message": "The production date field must be a date before or equal to today."
+    },
+    {
       "field": "production_finish",
       "message": "The production finish field must be a date after or equal to production date."
     }
   ]
 }
 ```
-
-Untuk endpoint daftar, metadata filter, sorting, dan pagination berada di `meta`, sedangkan daftar hasil berada di `data`:
-
-```json
-{
-  "code": 200,
-  "success": true,
-  "message": "Production order list retrieved successfully.",
-  "meta": {
-    "filter": {},
-    "sort": { "by": "plan_start", "dir": "desc" },
-    "pagination": { "total": 0, "display": 0, "page": 1, "page_size": 10 }
-  },
-  "data": []
-}
-```
-
-Endpoint API yang ditentukan pada soal teknis:
-
-- `GET /api/dashboard` — KPI, trend tujuh hari, status work order, dan top 10 mesin dalam satu response tanpa `meta`.
-- `GET /api/dashboard/machine/{id}` — detail performa mesin; `{id}` memakai `machine_code` dan dicantumkan pada `meta.filter.machine_code`.
-- `GET /api/production-orders` — mendukung `search`, `product`, `machine`, `status`, `date`, `date_from`, `date_to`, `page`, `per_page`, `sort`/`sort_by`, dan `direction`/`sort_direction`.
-- `POST /api/production-results` — menerima JSON:
-
-```json
-{
-  "wo_number": "WO2026000001",
-  "production_date": "2026-09-25 08:00:00",
-  "production_finish": "2026-09-30 15:00:00",
-  "qty_good": 1200,
-  "qty_reject": 20,
-  "runtime_minutes": 360
-}
-```
-
-`production_date` dan `production_finish` menerima format `Y-m-d H:i:s`. `production_date` tidak boleh melewati hari ini; jam berapa pun pada hari ini tetap valid. `production_finish` bersifat opsional dan harus sama dengan atau setelah `production_date`; jika tidak dikirim, waktu selesai dihitung dari `runtime_minutes`. `runtime_minutes` juga bersifat opsional. API menolak kuantitas negatif dan work order yang bukan `RUNNING`.
-
-Untuk melihat log atau menghentikan container tanpa menghapus data database:
-
-```powershell
-docker compose logs -f
-docker compose down
-```
-
-## About Laravel
-
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
-
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
-
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
-
-## Learning Laravel
-
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
-
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-## Laravel Sponsors
-
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
-
-### Premium Partners
-
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
-
-## Contributing
-
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
-
-## Code of Conduct
-
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
-
-## Security Vulnerabilities
-
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
-
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
