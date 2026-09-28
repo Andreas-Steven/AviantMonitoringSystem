@@ -1,18 +1,25 @@
 -- Soal 2 --
 
-WITH product_agg AS (
-    SELECT w.product_code,
-           COUNT(DISTINCT w.wo_number) AS total_wo,
-           SUM(w.target_qty)           AS target,
-           SUM(r.good_qty)             AS good_qty,
-           SUM(r.reject_qty)           AS reject_qty
-    FROM work_order w
-    JOIN production_result r ON r.wo_number = w.wo_number
-    GROUP BY w.product_code
+WITH Product_Aggregate AS (
+    SELECT 
+        work_order.product_code, 
+        COUNT(DISTINCT work_order.wo_number) AS total_wo, 
+        SUM(work_order.target_qty) AS target, 
+        SUM(production_result.good_qty) AS good_qty, 
+        SUM(production_result.reject_qty) AS reject_qty
+    FROM work_order 
+    JOIN production_result ON production_result.wo_number = work_order.wo_number
+    GROUP BY work_order.product_code
 )
-SELECT p.product_name AS Product, a.total_wo AS `Total WO`, a.target AS Target,
-       a.good_qty AS `Good Qty`, a.reject_qty AS `Reject Qty`,
-       FLOOR(a.good_qty / a.target * 100) AS `Achievement (%)`
-FROM product_agg a
-JOIN product p ON p.product_code = a.product_code
-ORDER BY a.good_qty / a.target DESC, p.product_name;
+
+SELECT 
+    product.product_name AS `Product`, 
+    Product_Aggregate.total_wo AS `Total WO`, 
+    Product_Aggregate.target AS `Target`, 
+    Product_Aggregate.good_qty AS `Good Qty`, 
+    Product_Aggregate.reject_qty AS `Reject Qty`, 
+    FLOOR(Product_Aggregate.good_qty / Product_Aggregate.target * 100) AS `Achievement (%)`
+    
+FROM Product_Aggregate
+JOIN product ON product.product_code = Product_Aggregate.product_code
+ORDER BY Product_Aggregate.good_qty / Product_Aggregate.target DESC, product.product_name;

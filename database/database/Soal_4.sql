@@ -1,38 +1,46 @@
 -- Soal 4 --
 
 WITH RECURSIVE 
-date_bounds AS (
+
+Date_Bounds AS (
     SELECT 
-        MIN(DATE(actual_start)) AS min_dt,
-        MAX(DATE(actual_start)) AS max_dt
+        MIN(DATE(production_result.actual_start)) AS min_dt, 
+        MAX(DATE(production_result.actual_start)) AS max_dt
     FROM production_result
 ),
-date_series AS (
-    SELECT min_dt AS dt, max_dt
-    FROM date_bounds
-    UNION ALL
-    SELECT DATE_ADD(dt, INTERVAL 1 DAY), max_dt
-    FROM date_series
-    WHERE dt < max_dt
-),
-daily_stats AS (
+
+Date_Series AS (
     SELECT 
-        DATE(pr.actual_start) AS prod_date,
-        SUM(pr.good_qty) AS Total_Good,
-        SUM(pr.reject_qty) AS Total_Reject,
-        SUM(wo.target_qty) AS Total_Target
-    FROM production_result pr
-    JOIN work_order wo ON pr.wo_number = wo.wo_number
-    GROUP BY DATE(pr.actual_start)
+        Date_Bounds.min_dt AS dt, 
+        Date_Bounds.max_dt
+    FROM Date_Bounds
+    UNION ALL
+    SELECT 
+        DATE_ADD(Date_Series.dt, INTERVAL 1 DAY), 
+        Date_Series.max_dt
+    FROM Date_Series
+    WHERE Date_Series.dt < Date_Series.max_dt
+),
+
+Daily_Stats AS (
+    SELECT 
+        DATE(production_result.actual_start) AS prod_date, 
+        SUM(production_result.good_qty) AS total_good, 
+        SUM(production_result.reject_qty) AS total_reject, 
+        SUM(work_order.target_qty) AS total_target
+    FROM production_result 
+    JOIN work_order ON work_order.wo_number = production_result.wo_number
+    GROUP BY DATE(production_result.actual_start)
 )
+
 SELECT 
-    ds.dt AS Date,
-    COALESCE(st.Total_Good, 0) AS `Total Good`,
-    COALESCE(st.Total_Reject, 0) AS `Total Reject`,
+    Date_Series.dt AS `Date`, 
+    COALESCE(Daily_Stats.total_good, 0) AS `Total Good`, 
+    COALESCE(Daily_Stats.total_reject, 0) AS `Total Reject`, 
     CASE 
-        WHEN COALESCE(st.Total_Target, 0) = 0 THEN 0 
-        ELSE ROUND(st.Total_Good / st.Total_Target * 100) 
-    END AS Achievement
-FROM date_series ds
-LEFT JOIN daily_stats st ON ds.dt = st.prod_date
-ORDER BY ds.dt;
+        WHEN COALESCE(Daily_Stats.total_target, 0) = 0 THEN 0 
+        ELSE ROUND(Daily_Stats.total_good / Daily_Stats.total_target * 100) 
+    END AS `Achievement`
+FROM Date_Series
+LEFT JOIN Daily_Stats ON Daily_Stats.prod_date = Date_Series.dt
+ORDER BY Date_Series.dt;

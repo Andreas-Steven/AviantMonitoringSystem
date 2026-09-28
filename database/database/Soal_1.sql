@@ -1,28 +1,24 @@
--- SOAL 1 --
+-- Soal 1 --
 
-SELECT
-    p.product_name AS product,
-    COALESCE(SUM(po.total_wo), 0) AS total_wo,
-    COUNT(po.employee_no) AS total_operator,
-    COALESCE(
-        GROUP_CONCAT(
-            e.full_name
-            ORDER BY e.full_name, e.employee_no
-            SEPARATOR ', '
-        ), ''
-FROM product AS p
-    ) AS nama_operator
-LEFT JOIN (
-    SELECT
-        product_code,
-        employee_no,
+WITH operator AS (
+    SELECT 
+        work_order.product_code, 
+        work_order.employee_no, 
         COUNT(*) AS total_wo
-    FROM work_order
-    GROUP BY product_code, employee_no
-) AS po ON po.product_code = p.product_code
-LEFT JOIN employee AS e ON e.employee_no = po.employee_no
-GROUP BY p.product_code, p.product_name
-ORDER BY
-    total_operator DESC,
-    p.product_name ASC,
-    p.product_code ASC;
+    FROM work_order 
+    GROUP BY work_order.product_code, work_order.employee_no
+)
+
+SELECT 
+    product.product_name AS `Product`, 
+    COALESCE(SUM(operator.total_wo), 0) AS `Total WO`, 
+    COUNT(operator.employee_no) AS `Total Operator`,
+    COALESCE(
+        GROUP_CONCAT(employee.full_name ORDER BY employee.full_name, employee.employee_no SEPARATOR ', '), ''
+    ) AS `Nama Operator`
+    
+FROM product
+LEFT JOIN operator ON operator.product_code = product.product_code
+LEFT JOIN employee ON employee.employee_no = operator.employee_no
+GROUP BY product.product_code, product.product_name
+ORDER BY `Total Operator` DESC, product.product_name, product.product_code;
