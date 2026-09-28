@@ -9,6 +9,7 @@ return [
     'dataset_unavailable' => 'Production dataset has not been imported into manufacturing_test.',
     'validation' => [
         'failed' => 'Validation failed. Please review the provided data',
+        'work_order_not_found' => 'The production order was not found.',
         'work_order_must_be_running' => 'The production order must have a status of :status.',
         'production_date_not_after_today' => 'The production date field must be a date before or equal to today.',
         'messages' => [

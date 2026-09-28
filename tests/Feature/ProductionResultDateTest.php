@@ -9,10 +9,12 @@ use App\Domains\Production\Models\ProductionResult;
 use App\Domains\Production\Models\WorkOrder;
 use App\Domains\Production\Repositories\ProductionOrderRepository;
 use App\Domains\Production\Repositories\ProductionResultRepository;
+use App\Domains\Production\Services\ProductionAchievementCalculator;
 use App\Domains\Production\Services\ProductionDashboardService;
 use App\Http\Middleware\EnsureProductionDashboardAccess;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\PresenceVerifierInterface;
+use Illuminate\Validation\ValidationException;
 use Mockery;
 use Tests\TestCase;
 
@@ -64,7 +66,11 @@ class ProductionResultDateTest extends TestCase
             ->once()
             ->andReturnUsing(fn ($callback) => $callback());
 
-        $result = (new StoreProductionResultAction($orderRepository, $resultRepository))->execute(
+        $result = (new StoreProductionResultAction(
+            $orderRepository,
+            $resultRepository,
+            new ProductionAchievementCalculator,
+        ))->execute(
             new StoreProductionResultData(
                 workOrderNumber: 'WO2026000898',
                 productionDate: $productionDate,
@@ -77,6 +83,43 @@ class ProductionResultDateTest extends TestCase
 
         $this->assertSame($productionDate, $result->productionDate);
         $this->assertSame($productionFinish, $result->productionFinish);
+    }
+
+    public function test_action_rejects_a_missing_work_order_with_a_specific_validation_error(): void
+    {
+        $orderRepository = Mockery::mock(ProductionOrderRepository::class);
+        $orderRepository->shouldReceive('findForUpdate')
+            ->once()
+            ->with('WO-MISSING')
+            ->andReturn(null);
+
+        $resultRepository = Mockery::mock(ProductionResultRepository::class);
+
+        DB::shouldReceive('transaction')
+            ->once()
+            ->andReturnUsing(fn ($callback) => $callback());
+
+        try {
+            (new StoreProductionResultAction(
+                $orderRepository,
+                $resultRepository,
+                new ProductionAchievementCalculator,
+            ))->execute(
+                new StoreProductionResultData(
+                    workOrderNumber: 'WO-MISSING',
+                    productionDate: today()->setTime(8, 0)->toDateTimeString(),
+                    quantityGood: 0,
+                    quantityReject: 0,
+                ),
+            );
+
+            $this->fail('Expected a validation exception for a missing work order.');
+        } catch (ValidationException $exception) {
+            $this->assertSame(
+                ['wo_number' => [__('production.validation.work_order_not_found')]],
+                $exception->errors(),
+            );
+        }
     }
 
     public function test_production_result_api_accepts_datetime_start_and_finish_values(): void

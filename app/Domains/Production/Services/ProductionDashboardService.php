@@ -2,14 +2,11 @@
 
 namespace App\Domains\Production\Services;
 
-use App\Domains\Production\Enums\WorkOrderStatus;
-
 use App\Domains\Production\DTOs\MachinePerformanceData;
 use App\Domains\Production\DTOs\ProductionDashboardData;
-
+use App\Domains\Production\Enums\WorkOrderStatus;
 use App\Domains\Production\Repositories\ProductionDashboardRepository;
 use App\Domains\Production\Repositories\ProductionSchemaRepository;
-
 use Carbon\CarbonImmutable;
 use Carbon\CarbonPeriod;
 
@@ -18,8 +15,8 @@ class ProductionDashboardService
     public function __construct(
         protected ProductionDashboardRepository $dashboardRepository,
         protected ProductionSchemaRepository $schemaRepository,
-    ) {
-    }
+        protected ProductionAchievementCalculator $achievementCalculator,
+    ) {}
 
     public function missingTables(): array
     {
@@ -78,7 +75,7 @@ class ProductionDashboardService
                     'date' => $dateKey,
                     'good_qty' => $good,
                     'reject_qty' => $reject,
-                    'achievement' => $this->achievement($good, $target),
+                    'achievement' => $this->achievementCalculator->calculate($good, $target),
                 ];
             }
 
@@ -96,7 +93,7 @@ class ProductionDashboardService
                 'today_target' => $todayTarget,
                 'today_good' => $todayGood,
                 'today_reject' => $todayReject,
-                'achievement' => $this->achievement($todayGood, $todayTarget),
+                'achievement' => $this->achievementCalculator->calculate($todayGood, $todayTarget),
             ],
             trend7Days: $trend,
             statusBreakdown: $statusBreakdown,
@@ -123,7 +120,7 @@ class ProductionDashboardService
             goodQty: $good,
             rejectQty: (int) ($production?->reject_qty ?? 0),
             downtimeMinutes: $this->dashboardRepository->downtimeMinutesForMachine($machineCode),
-            achievement: $this->achievement($good, $target),
+            achievement: $this->achievementCalculator->calculate($good, $target),
         );
     }
 
@@ -144,7 +141,7 @@ class ProductionDashboardService
                     'good_qty' => $good,
                     'reject_qty' => (int) $row->reject_qty,
                     'target_qty' => $target,
-                    'achievement' => $this->achievement($good, $target),
+                    'achievement' => $this->achievementCalculator->calculate($good, $target),
                 ];
             })
             ->all();
@@ -159,10 +156,5 @@ class ProductionDashboardService
         }
 
         return 0;
-    }
-
-    private function achievement(int $good, int $target): float
-    {
-        return $target > 0 ? round(($good / $target) * 100, 2) : 0.0;
     }
 }
