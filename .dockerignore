@@ -1,6 +1,4 @@
 .git
-.env
-.env.*
 vendor
 node_modules
 npm-debug.log*
